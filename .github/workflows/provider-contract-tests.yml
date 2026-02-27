@@ -1,0 +1,160 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Provider Contract & Swagger Tests — device-api
+#
+# Triggers:
+#   • push / pull_request on main or develop  (everyday dev workflow)
+#   • repository_dispatch: pact-contracts-updated  (consumer CI finished)
+#
+# What runs:
+#   1. Build DeviceApi.sln (API + provider tests + tool)
+#   2. Download the latest pact file published by device-api-consumer CI
+#   3. Run provider tests — DeviceApi boots in-process via ApiBootstrap,
+#      no external server needed
+#        - DeviceApiProviderTests        (pact replay)
+#        - SwaggerContractValidatorTests (swagger drift + consumer notification)
+#        - SwaggerCoverageTests          (coverage gate)
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Provider Contract Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  repository_dispatch:
+    types: [pact-contracts-updated]    # fired by device-api-consumer CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  CONFIGURATION: Release
+
+jobs:
+  # ── Job 1: Build ─────────────────────────────────────────────────────────────
+  build:
+    name: Restore & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-provider-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: nuget-provider-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore DeviceApi.sln
+
+      - name: Build
+        run: dotnet build DeviceApi.sln --no-restore --configuration ${{ env.CONFIGURATION }}
+
+      # Cache build output so the test job can skip rebuild
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/**/bin
+            src/**/obj
+            tests/**/bin
+            tests/**/obj
+            tools/**/bin
+            tools/**/obj
+          key: build-provider-${{ runner.os }}-${{ github.sha }}
+
+  # ── Job 2: Provider Tests ─────────────────────────────────────────────────────
+  provider-tests:
+    name: Run Provider Contract Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-provider-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: nuget-provider-${{ runner.os }}-
+
+      - name: Restore build output cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/**/bin
+            src/**/obj
+            tests/**/bin
+            tests/**/obj
+            tools/**/bin
+            tools/**/obj
+          key: build-provider-${{ runner.os }}-${{ github.sha }}
+
+      # ── Download pact file published by device-api-consumer CI ────────────────
+      # Uses dawidd6/action-download-artifact to pull cross-repo artifacts.
+      # The consumer CI uploads pacts under artifact name "pact-contracts".
+      #
+      # Required secret: CONSUMER_REPO_TOKEN — a PAT or fine-grained token
+      # with "Actions: read" permission on the device-api-consumer repo.
+      - name: Download pact contracts from consumer CI
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          workflow: consumer-contract-tests.yml
+          repo: ${{ github.repository_owner }}/device-api-consumer
+          name: pact-contracts
+          path: contracts/
+        # continue-on-error so first-run (no consumer artifact yet) still passes
+        continue-on-error: true
+
+      - name: List contract files available
+        run: |
+          echo "── contracts/ ──────────────────────────────"
+          ls -la contracts/ || echo "(empty — first run or download skipped)"
+
+      # ── Run all three provider test classes ───────────────────────────────────
+      # The DeviceApi is NOT started externally here.
+      # DeviceApiProviderFixture boots it in-process via ApiBootstrap.CreateWebApplication().
+      - name: Run provider tests
+        run: |
+          dotnet test tests/DeviceApi.Provider.Tests \
+            --no-build \
+            --configuration ${{ env.CONFIGURATION }} \
+            --logger "trx;LogFileName=provider-results.trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory TestResults/
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-test-results-${{ github.sha }}
+          path: TestResults/
+
+      - name: Publish test summary
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Provider Contract Test Results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true

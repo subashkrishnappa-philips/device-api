@@ -1,0 +1,13 @@
+{
+  "$schema": "./consumers.schema.json",
+  "consumers": [
+    {
+      "name": "DeviceApi-Consumer",
+      "team": "Mobile Device Management Team",
+      "contact": "mobile-device-team@example.com",
+      "slack": "#mobile-devices-platform",
+      "pactFile": "DeviceApi-Consumer-DeviceApi.json",
+      "notes": "Primary downstream consumer. Handles device-to-user assignment workflows."
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Device Management API",
+    "description": "REST API for managing device information. Provides endpoints to create and update device-to-user associations.",
+    "contact": {
+      "name": "Platform API Team",
+      "email": "api-support@example.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/UpdateDeviceInformation": {
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Updates the information associated with a specific device.",
+        "description": "Associates the given username with the device identified by the provided serial number.\r\n            \r\n**Sample Request:**\r\n            \r\n    POST /api/UpdateDeviceInformation\r\n    {\r\n        \u0022SerialNumber\u0022: \u0022SN-20240001-XYZ\u0022,\r\n        \u0022Username\u0022: \u0022john.doe\u0022\r\n    }\r\n            \r\n**Sample Response (200 OK):**\r\n            \r\n    {\r\n        \u0022success\u0022: true,\r\n        \u0022message\u0022: \u0022Device information updated successfully.\u0022,\r\n        \u0022serialNumber\u0022: \u0022SN-20240001-XYZ\u0022,\r\n        \u0022username\u0022: \u0022john.doe\u0022,\r\n        \u0022updatedAt\u0022: \u00222026-02-27T10:30:00Z\u0022\r\n    }",
+        "requestBody": {
+          "description": "The device information update payload.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceInformationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceInformationRequest"
+              }
+            },
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceInformationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device information updated successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateDeviceInformationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request payload is invalid or missing required fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected server error occurred."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UpdateDeviceInformationRequest": {
+        "required": [
+          "serialNumber",
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "serialNumber": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string",
+            "description": "The unique serial number of the device.",
+            "example": "SN-20240001-XYZ"
+          },
+          "username": {
+            "maxLength": 50,
+            "minLength": 1,
+            "type": "string",
+            "description": "The username to associate with the device.",
+            "example": "john.doe"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request payload for updating device information."
+      },
+      "UpdateDeviceInformationResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Indicates whether the operation was successful.",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable message describing the result of the operation.",
+            "nullable": true,
+            "example": "Device information updated successfully."
+          },
+          "serialNumber": {
+            "type": "string",
+            "description": "The serial number of the device that was updated.",
+            "nullable": true,
+            "example": "SN-20240001-XYZ"
+          },
+          "username": {
+            "type": "string",
+            "description": "The username now associated with the device.",
+            "nullable": true,
+            "example": "john.doe"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "The UTC timestamp at which the update occurred.",
+            "format": "date-time",
+            "example": "2026-02-27T10:30:00Z"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response returned after updating device information."
+      },
+      "ValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Device"
+    }
+  ]
+}

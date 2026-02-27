@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- Makes internal members (ApiBootstrap) visible to test projects -->
+    <AssemblyName>DeviceApi</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.OpenApi"         Version="2.4.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore"    Version="10.1.4" />
+  </ItemGroup>
+
+</Project>
