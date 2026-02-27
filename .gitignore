@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# device-api — .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── .NET build output ────────────────────────────────────────────────────────
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ── NuGet ────────────────────────────────────────────────────────────────────
+*.nupkg
+*.snupkg
+# Restore lock files — uncomment if you use dotnet restore --lock-file
+# packages.lock.json
+[Pp]ackages/
+!**/[Pp]ackages/build/
+
+# ── Test results & coverage ──────────────────────────────────────────────────
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml
+coverlet.json
+
+# ── IDE: Visual Studio ───────────────────────────────────────────────────────
+.vs/
+*.rsuser
+*.vsp
+*.vspx
+*.sap
+
+# ── IDE: JetBrains Rider ─────────────────────────────────────────────────────
+.idea/
+*.sln.iml
+
+# ── IDE: VS Code ─────────────────────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# ── OS artefacts ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────────────────────────
+# contracts/  — runtime-generated files vs committed files
+# ─────────────────────────────────────────────────────────────────────────────
+
+# IGNORED  — downloaded from consumer CI at provider test runtime; never commit
+contracts/DeviceApi-Consumer-DeviceApi.json
+
+# IGNORED  — written by SwaggerPactGenerator; informational only; re-generated each run
+contracts/consumer-notification.md
+
+# COMMITTED — auto-committed by swagger-sync.yml CI job after a swagger change;
+#             acts as the drift-detection baseline for SwaggerContractValidatorTests
+# contracts/swagger-baseline.json
+
+# COMMITTED — consumer team registry; edited by humans; lives in source control
+# contracts/consumers.json
+
+# COMMITTED — documentation
+# contracts/README.md
+
+# ─────────────────────────────────────────────────────────────────────────────
+# tools/SwaggerPactGenerator — local run output
+# ─────────────────────────────────────────────────────────────────────────────
+# Stubs written locally when running run-pact-tests.ps1 or the generator directly.
+# In CI these are uploaded as the "swagger-generated-stubs" artifact instead.
+generated-stubs/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Publish / deployment artefacts
+# ─────────────────────────────────────────────────────────────────────────────
+publish/
+**/publish/
