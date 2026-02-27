@@ -172,15 +172,49 @@ dotnet test tests/DeviceApi.Provider.Tests --configuration Release
 When you add, remove, or change an API endpoint:
 
 1. Update the controller / models in `src/DeviceApi`.
-2. Run `.\run-pact-tests.ps1 -UpdateBaseline` locally.
-3. The `SwaggerPactGenerator` tool will:
-   - Detect which endpoints are no longer covered by pacts.
-   - Generate skeleton test stubs in the consumer repo's `Generated/` folder.
-   - Write `contracts/consumer-notification.md` listing affected teams.
-4. Share `consumer-notification.md` with the teams listed in `contracts/consumers.json`.
-5. Open a PR — the CI pipeline will validate provider tests pass.
+2. Run `dotnet test tests/DeviceApi.Provider.Tests` — **`SwaggerContractValidatorTests` will fail** immediately, showing the swagger diff and listing which consumer teams must be notified.
+3. Review the failure output — it contains team names, email addresses, and Slack channels from `contracts/consumers.json`.
+4. Notify the affected teams (or let CI do it via the `swagger-sync.yml` pipeline).
+5. Once consumer pacts are updated and provider verification passes, re-run with:
+   ```powershell
+   .\run-pact-tests.ps1 -UpdateBaseline
+   ```
+   This regenerates `contracts/swagger-baseline.json` and commits it.
 
 Full details: [`docs/contract-change-runbook.md`](docs/contract-change-runbook.md)
+
+---
+
+## Recent API Changes
+
+### `NewPartNumber` field added (pending consumer acknowledgement)
+
+**Status: ⚠️ `SwaggerContractValidatorTests` is intentionally FAILING**
+
+The `NewPartNumber` field has been added to both the request and response:
+
+| | Field | Type | Required |
+|---|---|---|---|
+| **Request** | `newPartNumber` | `string?` | No (optional) |
+| **Response** | `newPartNumber` | `string?` | — (echoed back) |
+
+**Why the test is failing:**
+The committed `contracts/swagger-baseline.json` does not yet include `newPartNumber`. The `SwaggerContractValidatorTests` detects this drift and fails to protect consumer teams from silent breaking changes.
+
+**To resolve (after consumer team acknowledges):**
+
+```powershell
+# 1. Confirm consumer team has updated their pact interactions
+# 2. Run full pipeline — provider tests must pass with new pact file
+.\run-pact-tests.ps1 -UpdateBaseline
+# 3. Commit the regenerated contracts/swagger-baseline.json
+git add contracts/swagger-baseline.json
+git commit -m "chore: update swagger baseline — add NewPartNumber field"
+git push
+```
+
+**Consumer team action required:**
+The `swagger-sync.yml` CI job will detect the uncovered field and open a PR in `device-api-consumer` with generated test stubs. See the consumer repo for the incoming PR.
 
 ---
 

@@ -33,7 +33,8 @@ namespace DeviceApi.Controllers
         ///     POST /api/UpdateDeviceInformation
         ///     {
         ///         "SerialNumber": "SN-20240001-XYZ",
-        ///         "Username": "john.doe"
+        ///         "Username": "john.doe",
+        ///         "NewPartNumber": "PN-4400-REV-B"
         ///     }
         ///
         /// **Sample Response (200 OK):**
@@ -43,7 +44,8 @@ namespace DeviceApi.Controllers
         ///         "message": "Device information updated successfully.",
         ///         "serialNumber": "SN-20240001-XYZ",
         ///         "username": "john.doe",
-        ///         "updatedAt": "2026-02-27T10:30:00Z"
+        ///         "updatedAt": "2026-02-27T10:30:00Z",
+        ///         "newPartNumber": "PN-4400-REV-B"
         ///     }
         /// </remarks>
         /// <param name="request">The device information update payload.</param>
@@ -73,11 +75,12 @@ namespace DeviceApi.Controllers
             // TODO: Replace with actual business logic / persistence layer.
             var response = new UpdateDeviceInformationResponse
             {
-                Success      = true,
-                Message      = "Device information updated successfully.",
-                SerialNumber = request.SerialNumber,
-                Username     = request.Username,
-                UpdatedAt    = DateTime.UtcNow
+                Success       = true,
+                Message       = "Device information updated successfully.",
+                SerialNumber  = request.SerialNumber,
+                Username      = request.Username,
+                UpdatedAt     = DateTime.UtcNow,
+                NewPartNumber = request.NewPartNumber
             };
 
             return Ok(response);

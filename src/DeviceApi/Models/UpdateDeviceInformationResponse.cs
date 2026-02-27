@@ -34,5 +34,12 @@ namespace DeviceApi.Models
         /// </summary>
         /// <example>2026-02-27T10:30:00Z</example>
         public DateTime UpdatedAt { get; set; }
+
+        /// <summary>
+        /// The new part number that was applied to the device.
+        /// Null when no part number change was requested.
+        /// </summary>
+        /// <example>PN-4400-REV-B</example>
+        public string? NewPartNumber { get; set; }
     }
 }
