@@ -33,42 +33,103 @@ In an enterprise setup the consumer team owns their own pact tests. They live in
 
 ---
 
-## GitHub Actions Pipeline
+## GitHub Actions Pipelines
 
-The pipeline is defined in [`.github/workflows/provider-contract-tests.yml`](.github/workflows/provider-contract-tests.yml).
+Two independent workflows live in [`.github/workflows/`](.github/workflows/).
 
-### Triggers
+### 1. `provider-contract-tests.yml` — Pact verification
 
-| Event | When |
+| Trigger | When |
 |---|---|
 | `push` | Every push to `main` or `develop` |
 | `pull_request` | Every PR targeting `main` or `develop` |
-| `repository_dispatch: pact-contracts-updated` | Fired automatically by `device-api-consumer` CI after new pacts are published |
+| `repository_dispatch: pact-contracts-updated` | Fired by `device-api-consumer` CI after new pacts published |
 
-### Jobs
+**Jobs:** `build` → `provider-tests`
 
-```
-build ──► provider-tests
-```
+The provider tests boot DeviceApi in-process via `ApiBootstrap` — no external server needed.
 
-| Job | What it does |
+| Test class | Purpose |
 |---|---|
-| `build` | `dotnet restore` + `dotnet build DeviceApi.sln` |
-| `provider-tests` | Downloads pact artifacts from consumer CI → runs 3 test classes in-process |
-
-### Provider test classes
-
-| Class | Purpose |
-|---|---|
-| `DeviceApiProviderTests` | Replays every consumer interaction against the real API (Kestrel boots in-process) |
+| `DeviceApiProviderTests` | Replays every consumer interaction against the real API |
 | `SwaggerContractValidatorTests` | Detects swagger drift; prints team/Slack contacts on failure |
 | `SwaggerCoverageTests` | Fails if any swagger endpoint has no matching pact interaction |
+
+---
+
+### 2. `swagger-sync.yml` — Swagger change propagation
+
+| Trigger | When |
+|---|---|
+| `push` to `main` | Only when controller / model / csproj files change |
+| `workflow_dispatch` | Manual re-sync at any time |
+
+**What it does:**
+
+```
+1. Build DeviceApi + SwaggerPactGenerator
+2. Start DeviceApi in background → fetch /swagger/v1/swagger.json
+3. Run SwaggerPactGenerator
+       --pact-file   latest consumer pact (filters already-covered endpoints)
+       --consumer-output  generated-stubs/
+4. If new stubs generated:
+       a. Upload artifact "swagger-generated-stubs"
+       b. Dispatch "swagger-updated" to device-api-consumer
+            └─► consumer CI opens a PR with generated stubs
+5. Commit updated contracts/swagger-baseline.json back to this repo
+```
+
+---
+
+### Full end-to-end flow
+
+```
+device-api (provider)                     device-api-consumer
+─────────────────────────────────         ──────────────────────────────────────
+
+[Developer adds new endpoint]
+  │
+  ▼
+push to main
+  │
+  ├─► provider-contract-tests.yml         ← runs immediately
+  │     SwaggerCoverageTests FAILS         ← new endpoint has no pact yet
+  │
+  └─► swagger-sync.yml
+        runs SwaggerPactGenerator
+        uploads swagger-generated-stubs    
+        dispatches "swagger-updated" ──────────────────────────────────────────►
+                                                │
+                                                ▼
+                                          consumer-contract-tests.yml
+                                            job: create-stub-pr
+                                              downloads stubs artifact
+                                              opens PR: "feat: new swagger
+                                                         endpoints from device-api"
+                                                │
+                                          [Consumer team reviews PR]
+                                          [Moves stubs → Contracts/]
+                                          [Merges PR]
+                                                │
+                                                ▼
+                                          consumer-contract-tests.yml
+                                            job: generate-pacts
+                                              runs consumer tests
+                                              uploads pact-contracts
+                                              dispatches "pact-contracts-updated" ─►
+                                                                                    │
+                                                                                    ▼
+                                                                          provider-contract-tests.yml
+                                                                            SwaggerCoverageTests PASSES
+```
+
+---
 
 ### Required secrets
 
 | Secret | Usage |
 |---|---|
-| `CONSUMER_REPO_TOKEN` | PAT with **Actions: read** on `device-api-consumer` — used to download pact artifacts |
+| `CONSUMER_REPO_TOKEN` | PAT with **Actions: read + write** on `device-api-consumer` — used to download pact artifacts AND dispatch `swagger-updated` |
 
 ---
 

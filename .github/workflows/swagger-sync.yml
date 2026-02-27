@@ -1,0 +1,230 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Swagger Sync — device-api
+#
+# PURPOSE
+# ───────
+# Detects when the DeviceApi swagger changes (new endpoints, changed request/
+# response shapes, removed operations) and automatically opens a pull request
+# in device-api-consumer with generated test stubs for every uncovered endpoint.
+#
+# FLOW
+# ────
+#   1. Build DeviceApi + SwaggerPactGenerator
+#   2. Start DeviceApi in background → fetch live swagger.json
+#   3. Run SwaggerPactGenerator
+#        --swagger-url  live API endpoint
+#        --pact-file    latest pact (if exists)  ← filters already-covered endpoints
+#        --consumer-output  generated-stubs/
+#        --notification     contracts/consumer-notification.md
+#   4. If new stubs were generated:
+#        a. Upload stubs as artifact "swagger-generated-stubs"
+#        b. Dispatch "swagger-updated" to device-api-consumer  ← triggers stub PR
+#   5. If contracts/swagger-baseline.json changed:
+#        Commit updated baseline back to device-api (so drift is tracked)
+#
+# TRIGGERS
+# ────────
+#   • push to main — only when API source changes (controllers / models)
+#   • workflow_dispatch — manual re-sync at any time
+#
+# REQUIRED SECRETS
+# ────────────────
+#   CONSUMER_REPO_TOKEN — PAT with "Actions:write" on device-api-consumer
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Swagger Sync to Consumer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/DeviceApi/Controllers/**'
+      - 'src/DeviceApi/Models/**'
+      - 'src/DeviceApi/Program.cs'
+      - 'src/DeviceApi/**/*.csproj'
+  workflow_dispatch:
+
+concurrency:
+  group: swagger-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  CONFIGURATION: Release
+  API_PORT: 5099
+
+jobs:
+  sync-swagger:
+    name: Generate Stubs & Notify Consumer
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need write access to commit updated swagger-baseline.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-provider-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+          restore-keys: nuget-provider-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore DeviceApi.sln
+
+      - name: Build (API + SwaggerPactGenerator)
+        run: dotnet build DeviceApi.sln --no-restore --configuration ${{ env.CONFIGURATION }}
+
+      # ── Start DeviceApi in the background ────────────────────────────────────
+      - name: Start DeviceApi
+        run: |
+          dotnet run \
+            --project src/DeviceApi \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            --urls "http://localhost:${{ env.API_PORT }}" \
+            &
+          echo "DEVAPI_PID=$!" >> $GITHUB_ENV
+
+      - name: Wait for DeviceApi to be ready
+        run: |
+          SWAGGER_URL="http://localhost:${{ env.API_PORT }}/swagger/v1/swagger.json"
+          echo "Polling $SWAGGER_URL ..."
+          for i in $(seq 1 30); do
+            if curl -sf "$SWAGGER_URL" -o /dev/null; then
+              echo "DeviceApi is ready (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::DeviceApi did not start within 60 seconds"
+          exit 1
+
+      # ── Download latest pact file from consumer CI (if available) ─────────────
+      # This lets the generator know which endpoints are already covered,
+      # so it only generates stubs for NEW / changed / uncovered operations.
+      - name: Download latest pact contracts (optional)
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          github_token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          workflow: consumer-contract-tests.yml
+          repo: ${{ github.repository_owner }}/device-api-consumer
+          name: pact-contracts
+          path: contracts/
+        continue-on-error: true   # OK if no consumer artifact exists yet
+
+      # ── Run SwaggerPactGenerator ──────────────────────────────────────────────
+      - name: Run SwaggerPactGenerator
+        run: |
+          mkdir -p generated-stubs contracts
+          dotnet run \
+            --project tools/SwaggerPactGenerator \
+            --configuration ${{ env.CONFIGURATION }} \
+            --no-build \
+            -- \
+            --swagger-url "http://localhost:${{ env.API_PORT }}/swagger/v1/swagger.json" \
+            --consumer-output generated-stubs/ \
+            --notification contracts/consumer-notification.md \
+            $([ -f contracts/DeviceApi-Consumer-DeviceApi.json ] && echo "--pact-file contracts/DeviceApi-Consumer-DeviceApi.json" || true)
+
+      # ── Capture live swagger.json → update baseline ───────────────────────────
+      - name: Fetch live swagger.json
+        run: |
+          curl -sf "http://localhost:${{ env.API_PORT }}/swagger/v1/swagger.json" \
+            -o contracts/swagger-baseline.json
+          echo "swagger-baseline.json written:"
+          cat contracts/swagger-baseline.json | python3 -m json.tool --indent 2 | head -20
+
+      # ── Stop DeviceApi ────────────────────────────────────────────────────────
+      - name: Stop DeviceApi
+        if: always()
+        run: |
+          kill $DEVAPI_PID 2>/dev/null || true
+          echo "DeviceApi stopped."
+
+      # ── Check if any new stubs were generated ─────────────────────────────────
+      - name: Check for generated stubs
+        id: check-stubs
+        run: |
+          STUB_COUNT=$(find generated-stubs/ -name "*.cs" 2>/dev/null | wc -l)
+          echo "stub_count=$STUB_COUNT" >> $GITHUB_OUTPUT
+          echo "stubs_found=$([ $STUB_COUNT -gt 0 ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "Generated $STUB_COUNT stub file(s):"
+          find generated-stubs/ -name "*.cs" 2>/dev/null || echo "(none)"
+
+      # ── Upload stubs as artifact for consumer CI to download ──────────────────
+      - name: Upload generated stubs
+        if: steps.check-stubs.outputs.stubs_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-generated-stubs
+          path: generated-stubs/
+          retention-days: 30
+
+      - name: Upload consumer notification report
+        if: steps.check-stubs.outputs.stubs_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: consumer-notification
+          path: contracts/consumer-notification.md
+          retention-days: 30
+
+      # ── Dispatch swagger-updated to consumer CI ───────────────────────────────
+      # The consumer CI will download the stubs and open a PR with them.
+      - name: Dispatch swagger-updated to device-api-consumer
+        if: steps.check-stubs.outputs.stubs_found == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          repository: ${{ github.repository_owner }}/device-api-consumer
+          event-type: swagger-updated
+          client-payload: |
+            {
+              "provider_repo":   "${{ github.repository }}",
+              "provider_run_id": "${{ github.run_id }}",
+              "provider_sha":    "${{ github.sha }}",
+              "provider_ref":    "${{ github.ref_name }}",
+              "stub_count":      "${{ steps.check-stubs.outputs.stub_count }}",
+              "swagger_url":     "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+
+      # ── Commit updated swagger-baseline.json back to device-api ──────────────
+      # This keeps the committed baseline in sync with what the API actually serves,
+      # so SwaggerContractValidatorTests has a stable reference.
+      - name: Commit updated swagger baseline
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update swagger-baseline.json [skip ci]"
+          file_pattern: "contracts/swagger-baseline.json contracts/consumer-notification.md"
+          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+      # ── Job summary ───────────────────────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## Swagger Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Provider SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| New stubs generated | ${{ steps.check-stubs.outputs.stub_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Consumer notified | ${{ steps.check-stubs.outputs.stubs_found }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check-stubs.outputs.stubs_found }}" = "true" ]; then
+            echo "✅ **Consumer team has been notified.** A PR will be opened in \`device-api-consumer\` with stub files." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Consumer notification" >> $GITHUB_STEP_SUMMARY
+            cat contracts/consumer-notification.md 2>/dev/null || echo "(no notification file)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No new stubs required.** All swagger endpoints are already covered by pact interactions." >> $GITHUB_STEP_SUMMARY
+          fi
