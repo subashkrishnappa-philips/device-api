@@ -29,6 +29,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# dorny/test-reporter requires checks:write to create GitHub Check runs
+permissions:
+  contents: read
+  checks: write
+
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_NOLOGO: true
@@ -142,7 +147,6 @@ jobs:
       - name: Run provider tests
         run: |
           dotnet test tests/DeviceApi.Provider.Tests \
-            --no-build \
             --configuration ${{ env.CONFIGURATION }} \
             --logger "trx;LogFileName=provider-results.trx" \
             --logger "console;verbosity=normal" \
