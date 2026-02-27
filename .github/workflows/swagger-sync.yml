@@ -58,6 +58,10 @@ jobs:
   sync-swagger:
     name: Generate Stubs & Notify Consumer
     runs-on: ubuntu-latest
+    env:
+      # Expose secret existence as an env var — the secrets context is NOT
+      # available in step-level if: expressions, but env vars are.
+      HAS_CONSUMER_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN != '' }}
 
     steps:
       - name: Checkout
@@ -187,7 +191,7 @@ jobs:
       # Guard: repository-dispatch requires a cross-repo PAT; skip if not configured
       # rather than letting the action throw "Parameter token or opts.auth is required".
       - name: Dispatch swagger-updated to device-api-consumer
-        if: steps.check-stubs.outputs.stubs_found == 'true' && secrets.CONSUMER_REPO_TOKEN != ''
+        if: steps.check-stubs.outputs.stubs_found == 'true' && env.HAS_CONSUMER_TOKEN == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.CONSUMER_REPO_TOKEN }}
