@@ -118,7 +118,12 @@ jobs:
       - name: Download pact contracts from consumer CI
         uses: dawidd6/action-download-artifact@v6
         with:
-          github_token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured
+          # so the action receives a valid auth token and won't throw
+          # "Parameter token or opts.auth is required".
+          # GITHUB_TOKEN can't reach cross-repo artifacts, so the download may
+          # return a 404 — that's fine because continue-on-error handles it.
+          github_token: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
           workflow: consumer-contract-tests.yml
           repo: ${{ github.repository_owner }}/device-api-consumer
           name: pact-contracts
