@@ -220,12 +220,20 @@ jobs:
       # ── Commit updated swagger-baseline.json back to device-api ──────────────
       # This keeps the committed baseline in sync with what the API actually serves,
       # so SwaggerContractValidatorTests has a stable reference.
+      # consumer-notification.md is only added when it was actually written
+      # (i.e. when stubs were generated) to avoid a fatal git pathspec error.
       - name: Commit updated swagger baseline
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: update swagger-baseline.json [skip ci]"
-          file_pattern: "contracts/swagger-baseline.json contracts/consumer-notification.md"
-          commit_author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add contracts/swagger-baseline.json
+          [ -f contracts/consumer-notification.md ] && git add contracts/consumer-notification.md || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update swagger-baseline.json [skip ci]"
+            git push
+          fi
 
       # ── Job summary ───────────────────────────────────────────────────────────
       - name: Write job summary
