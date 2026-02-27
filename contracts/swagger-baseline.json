@@ -20,7 +20,7 @@
           "Device"
         ],
         "summary": "Updates the information associated with a specific device.",
-        "description": "Associates the given username with the device identified by the provided serial number.\r\n            \r\n**Sample Request:**\r\n            \r\n    POST /api/UpdateDeviceInformation\r\n    {\r\n        \u0022SerialNumber\u0022: \u0022SN-20240001-XYZ\u0022,\r\n        \u0022Username\u0022: \u0022john.doe\u0022\r\n    }\r\n            \r\n**Sample Response (200 OK):**\r\n            \r\n    {\r\n        \u0022success\u0022: true,\r\n        \u0022message\u0022: \u0022Device information updated successfully.\u0022,\r\n        \u0022serialNumber\u0022: \u0022SN-20240001-XYZ\u0022,\r\n        \u0022username\u0022: \u0022john.doe\u0022,\r\n        \u0022updatedAt\u0022: \u00222026-02-27T10:30:00Z\u0022\r\n    }",
+        "description": "Associates the given username with the device identified by the provided serial number.\n            \n**Sample Request:**\n            \n    POST /api/UpdateDeviceInformation\n    {\n        \"SerialNumber\": \"SN-20240001-XYZ\",\n        \"Username\": \"john.doe\",\n        \"NewPartNumber\": \"PN-4400-REV-B\"\n    }\n            \n**Sample Response (200 OK):**\n            \n    {\n        \"success\": true,\n        \"message\": \"Device information updated successfully.\",\n        \"serialNumber\": \"SN-20240001-XYZ\",\n        \"username\": \"john.doe\",\n        \"updatedAt\": \"2026-02-27T10:30:00Z\",\n        \"newPartNumber\": \"PN-4400-REV-B\"\n    }",
         "requestBody": {
           "description": "The device information update payload.",
           "content": {
@@ -34,7 +34,7 @@
                 "$ref": "#/components/schemas/UpdateDeviceInformationRequest"
               }
             },
-            "application/*\u002Bjson": {
+            "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateDeviceInformationRequest"
               }
@@ -91,6 +91,14 @@
             "type": "string",
             "description": "The username to associate with the device.",
             "example": "john.doe"
+          },
+          "newPartNumber": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string",
+            "description": "The new part number to associate with the device.\nOptional. When provided, the device catalogue entry will be updated.",
+            "nullable": true,
+            "example": "PN-4400-REV-B"
           }
         },
         "additionalProperties": false,
@@ -127,6 +135,12 @@
             "description": "The UTC timestamp at which the update occurred.",
             "format": "date-time",
             "example": "2026-02-27T10:30:00Z"
+          },
+          "newPartNumber": {
+            "type": "string",
+            "description": "The new part number that was applied to the device.\nNull when no part number change was requested.",
+            "nullable": true,
+            "example": "PN-4400-REV-B"
           }
         },
         "additionalProperties": false,
@@ -167,7 +181,7 @@
             "nullable": true
           }
         },
-        "additionalProperties": {}
+        "additionalProperties": { }
       }
     }
   },
