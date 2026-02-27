@@ -48,6 +48,11 @@ concurrency:
   group: swagger-sync-${{ github.ref }}
   cancel-in-progress: true
 
+# git-auto-commit-action pushes back the updated swagger-baseline.json,
+# which requires contents:write on the GITHUB_TOKEN.
+permissions:
+  contents: write
+
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_NOLOGO: true
@@ -91,12 +96,17 @@ jobs:
 
       # ── Start DeviceApi in the background ────────────────────────────────────
       - name: Start DeviceApi
+        env:
+          # Set URL via environment variable so it takes precedence over everything.
+          # Using --no-launch-profile prevents launchSettings.json from overriding
+          # the port (the 'http' profile binds to 5000, not our CI port 5099).
+          ASPNETCORE_URLS: "http://localhost:${{ env.API_PORT }}"
         run: |
           dotnet run \
             --project src/DeviceApi \
             --configuration ${{ env.CONFIGURATION }} \
             --no-build \
-            --urls "http://localhost:${{ env.API_PORT }}" \
+            --no-launch-profile \
             &
           echo "DEVAPI_PID=$!" >> $GITHUB_ENV
 
