@@ -118,12 +118,12 @@ jobs:
       # Uses dawidd6/action-download-artifact to pull cross-repo artifacts.
       # The consumer CI uploads pacts under artifact name "pact-contracts".
       #
-      # Required secret: CONSUMER_REPO_TOKEN — a PAT or fine-grained token
+      # Required secret: CONSUMER_REPO_SECRET — a PAT or fine-grained token
       # with "Actions: read" permission on the device-api-consumer repo.
       - name: Download pact contracts from consumer CI
         uses: dawidd6/action-download-artifact@v6
         with:
-          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured
+          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_SECRET is not yet configured
           # so the action receives a valid auth token and won't throw
           # "Parameter token or opts.auth is required".
           # GITHUB_TOKEN can't reach cross-repo artifacts, so the download may

@@ -29,7 +29,7 @@
 #
 # REQUIRED SECRETS
 # ────────────────
-#   CONSUMER_REPO_TOKEN — PAT with "Actions:write" on device-api-consumer
+#   CONSUMER_REPO_SECRET — PAT with "Actions:write" on device-api-consumer
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Swagger Sync to Consumer
@@ -130,7 +130,7 @@ jobs:
       - name: Download latest pact contracts (optional)
         uses: dawidd6/action-download-artifact@v6
         with:
-          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured.
+          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_SECRET is not yet configured.
           # Cross-repo download requires the real PAT; without it the action returns
           # 404 which continue-on-error absorbs gracefully.
           github_token: ${{ secrets.CONSUMER_REPO_SECRET || github.token }}
@@ -204,7 +204,7 @@ jobs:
         if: steps.check-stubs.outputs.stubs_found == 'true' && env.HAS_CONSUMER_TOKEN == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          token: ${{ secrets.CONSUMER_REPO_SECRET }}
           repository: ${{ github.repository_owner }}/device-api-consumer
           event-type: swagger-updated
           client-payload: |
@@ -251,7 +251,7 @@ jobs:
             if [ "${{ env.HAS_CONSUMER_TOKEN }}" = "true" ]; then
               echo "✅ **Consumer team has been notified automatically.** A PR will be opened in \`device-api-consumer\`." >> $GITHUB_STEP_SUMMARY
             else
-              echo "⚠️ **CONSUMER_REPO_TOKEN is not configured — automatic dispatch was skipped.**" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ **CONSUMER_REPO_SECRET is not configured — automatic dispatch was skipped.**" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "To open the stub PR manually, go to the consumer repo and trigger the workflow:" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
