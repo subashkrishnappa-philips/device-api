@@ -12,9 +12,10 @@ namespace SwaggerPactGenerator;
 public sealed class ConsumerNotificationReport
 {
     public async Task WriteReportAsync(
-        string                 reportPath,
-        List<ApiOperation>     uncoveredOps,
-        string?                consumersRegistryPath = null)
+        string                        reportPath,
+        List<ApiOperation>            uncoveredOps,
+        string?                       consumersRegistryPath = null,
+        List<SchemaDriftOperation>?   drifted               = null)
     {
         var consumers = LoadConsumerRegistry(consumersRegistryPath);
         var sb        = new StringBuilder();
@@ -25,18 +26,41 @@ public sealed class ConsumerNotificationReport
         sb.AppendLine();
         sb.AppendLine("## Summary");
         sb.AppendLine();
-        sb.AppendLine($"The DeviceApi swagger has **{uncoveredOps.Count} new or uncovered endpoint(s)** that require consumer pact tests.");
+        sb.AppendLine($"The DeviceApi swagger has **{uncoveredOps.Count} new or uncovered endpoint(s)** and **{drifted?.Count ?? 0} schema drift(s)** that require consumer pact test updates.");
         sb.AppendLine();
 
-        sb.AppendLine("## Uncovered Endpoints");
-        sb.AppendLine();
-        sb.AppendLine("| Method | Path | Summary |");
-        sb.AppendLine("|--------|------|---------|");
+        if (uncoveredOps.Count > 0)
+        {
+            sb.AppendLine("## Uncovered Endpoints (new stubs generated)");
+            sb.AppendLine();
+            sb.AppendLine("| Method | Path | Summary |");
+            sb.AppendLine("|--------|------|---------|");
 
-        foreach (var op in uncoveredOps)
-            sb.AppendLine($"| `{op.Method.ToUpper()}` | `{op.Path}` | {op.Summary ?? "-"} |");
+            foreach (var op in uncoveredOps)
+                sb.AppendLine($"| `{op.Method.ToUpper()}` | `{op.Path}` | {op.Summary ?? "-"} |");
 
-        sb.AppendLine();
+            sb.AppendLine();
+        }
+
+        if (drifted?.Count > 0)
+        {
+            sb.AppendLine("## Schema Drift on Covered Endpoints");
+            sb.AppendLine();
+            sb.AppendLine("These endpoints are already covered by pact interactions, but their request body schema has changed.");
+            sb.AppendLine("A `*.SchemaDrift.Generated.cs` file has been placed in `Generated/` with the full diff and instructions.");
+            sb.AppendLine();
+            sb.AppendLine("| Method | Path | Added Fields | Removed Fields |");
+            sb.AppendLine("|--------|------|-------------|----------------|");
+
+            foreach (var d in drifted)
+            {
+                var added   = d.AddedFields.Count   > 0 ? string.Join(", ", d.AddedFields.Select(f => $"`{f}`"))   : "-";
+                var removed = d.RemovedFields.Count > 0 ? string.Join(", ", d.RemovedFields.Select(f => $"`{f}`")) : "-";
+                sb.AppendLine($"| `{d.SwaggerOperation.Method.ToUpper()}` | `{d.SwaggerOperation.Path}` | {added} | {removed} |");
+            }
+
+            sb.AppendLine();
+        }
 
         if (consumers.Count > 0)
         {

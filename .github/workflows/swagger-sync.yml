@@ -66,7 +66,7 @@ jobs:
     env:
       # Expose secret existence as an env var — the secrets context is NOT
       # available in step-level if: expressions, but env vars are.
-      HAS_CONSUMER_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN != '' }}
+      HAS_CONSUMER_TOKEN: ${{ secrets.CONSUMER_REPO_SECRET != '' }}
 
     steps:
       - name: Checkout
@@ -133,7 +133,7 @@ jobs:
           # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured.
           # Cross-repo download requires the real PAT; without it the action returns
           # 404 which continue-on-error absorbs gracefully.
-          github_token: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
+          github_token: ${{ secrets.CONSUMER_REPO_SECRET || github.token }}
           workflow: consumer-contract-tests.yml
           repo: ${{ github.repository_owner }}/device-api-consumer
           name: pact-contracts

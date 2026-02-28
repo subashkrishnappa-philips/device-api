@@ -57,21 +57,34 @@ else
 var operations = parser.ExtractOperations(swaggerJson);
 Console.WriteLine($"[INFO] Found {operations.Count} operation(s) in swagger.");
 
-// ── 2. Find uncovered operations ─────────────────────────────────────────────
+// ── 2. Find uncovered operations + schema drift ───────────────────────────────
 List<ApiOperation> uncovered;
+List<SchemaDriftOperation> drifted = [];
 
 if (!string.IsNullOrEmpty(cliArgs.PactFile) && File.Exists(cliArgs.PactFile))
 {
-    var pactJson  = await File.ReadAllTextAsync(cliArgs.PactFile);
-    var covered   = parser.ExtractPactInteractions(pactJson);
-    uncovered     = operations
+    var pactJson = await File.ReadAllTextAsync(cliArgs.PactFile);
+    var covered  = parser.ExtractPactInteractions(pactJson);
+    uncovered    = operations
         .Where(op => !covered.Any(c =>
-            string.Equals(c.Method, op.Method, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(c.Path, op.Path, StringComparison.OrdinalIgnoreCase)))
+            string.Equals(c.Method, op.Method, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(c.Path,   op.Path,   StringComparison.OrdinalIgnoreCase)))
         .ToList();
+
+    // Detect schema drift on already-covered operations
+    drifted = parser.DetectSchemaDrift(operations, covered);
 
     Console.WriteLine($"[INFO] {covered.Count} operation(s) already covered by pact interactions.");
     Console.WriteLine($"[INFO] {uncovered.Count} operation(s) require new stubs.");
+    Console.WriteLine($"[INFO] {drifted.Count} covered operation(s) have request body schema drift.");
+
+    foreach (var d in drifted)
+    {
+        if (d.AddedFields.Count > 0)
+            Console.WriteLine($"[DRIFT] {d.SwaggerOperation.Method.ToUpper()} {d.SwaggerOperation.Path} — added: {string.Join(", ", d.AddedFields)}");
+        if (d.RemovedFields.Count > 0)
+            Console.WriteLine($"[DRIFT] {d.SwaggerOperation.Method.ToUpper()} {d.SwaggerOperation.Path} — removed: {string.Join(", ", d.RemovedFields)}");
+    }
 }
 else
 {
@@ -79,10 +92,10 @@ else
     Console.WriteLine("[INFO] No pact file provided — generating stubs for all operations.");
 }
 
-if (uncovered.Count == 0)
+if (uncovered.Count == 0 && drifted.Count == 0)
 {
     Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine("[OK]  All swagger operations are covered. No stubs generated.");
+    Console.WriteLine("[OK]  All swagger operations are covered and no schema drift detected. No stubs generated.");
     Console.ResetColor();
     return 0;
 }
@@ -98,16 +111,28 @@ Directory.CreateDirectory(outputDir);
 
 int generated = 0;
 
+// 3a. New-endpoint stubs
 foreach (var op in uncovered)
 {
     var filePath = generator.GenerateStub(op, outputDir);
     Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"[GEN] Created stub: {filePath}");
+    Console.WriteLine($"[GEN]   New endpoint stub : {filePath}");
     Console.ResetColor();
     generated++;
 }
 
-Console.WriteLine($"[INFO] Generated {generated} stub(s) in: {outputDir}");
+// 3b. Schema-drift notice stubs
+int driftGenerated = 0;
+foreach (var drift in drifted)
+{
+    var filePath = generator.GenerateDriftStub(drift, outputDir);
+    Console.ForegroundColor = ConsoleColor.Magenta;
+    Console.WriteLine($"[DRIFT] Schema drift stub  : {filePath}");
+    Console.ResetColor();
+    driftGenerated++;
+}
+
+Console.WriteLine($"[INFO] Generated {generated} new-endpoint stub(s) and {driftGenerated} schema-drift notice(s) in: {outputDir}");
 
 // ── 4. Write consumer notification report ────────────────────────────────────
 if (!string.IsNullOrEmpty(cliArgs.NotificationFile))
@@ -119,13 +144,14 @@ if (!string.IsNullOrEmpty(cliArgs.NotificationFile))
     await notifier.WriteReportAsync(
         cliArgs.NotificationFile,
         uncovered,
-        consumersRegistryPath: consumersFile);
+        consumersRegistryPath: consumersFile,
+        drifted: drifted);
 
     Console.WriteLine($"[INFO] Consumer notification report: {cliArgs.NotificationFile}");
 }
 
 Console.ForegroundColor = ConsoleColor.Green;
-Console.WriteLine($"[DONE] {generated} stub(s) created. Consumer teams must review Generated/ folder.");
+Console.WriteLine($"[DONE] {generated + driftGenerated} file(s) written. Consumer teams must review Generated/ folder.");
 Console.ResetColor();
 
 return 0;
