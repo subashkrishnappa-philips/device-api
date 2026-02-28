@@ -130,10 +130,10 @@ jobs:
       - name: Download latest pact contracts (optional)
         uses: dawidd6/action-download-artifact@v6
         with:
-          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_SECRET is not yet configured.
+          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured.
           # Cross-repo download requires the real PAT; without it the action returns
           # 404 which continue-on-error absorbs gracefully.
-          github_token: ${{ secrets.CONSUMER_REPO_SECRET || github.token }}
+          github_token: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
           workflow: consumer-contract-tests.yml
           repo: ${{ github.repository_owner }}/device-api-consumer
           name: pact-contracts
@@ -204,7 +204,7 @@ jobs:
         if: steps.check-stubs.outputs.stubs_found == 'true' && env.HAS_CONSUMER_TOKEN == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.CONSUMER_REPO_SECRET }}
+          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
           repository: ${{ github.repository_owner }}/device-api-consumer
           event-type: swagger-updated
           client-payload: |
