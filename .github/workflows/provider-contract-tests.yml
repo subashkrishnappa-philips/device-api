@@ -114,26 +114,33 @@ jobs:
             tools/**/obj
           key: build-provider-${{ runner.os }}-${{ github.sha }}
 
-      # ── Download pact file published by device-api-consumer CI ────────────────
-      # Uses dawidd6/action-download-artifact to pull cross-repo artifacts.
-      # The consumer CI uploads pacts under artifact name "pact-contracts".
-      #
-      # Required secret: CONSUMER_REPO_TOKEN — a PAT or fine-grained token
-      # with "Actions: read" permission on the device-api-consumer repo.
+      - name: Get Latest Run ID from Consumer CI
+        id: get-run-id
+        run: |
+            # Use GitHub CLI to find the latest successful run ID for the specific workflow
+            RUN_ID=$(gh run list \
+            --repo "${{ github.repository_owner }}/device-api-consumer" \
+            --workflow "consumer-contract-tests.yml" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+            
+            echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+        env:
+            # Use your existing token logic to authorize the CLI
+            GH_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
+        continue-on-error: true
+
       - name: Download pact contracts from consumer CI
-        uses: dawidd6/action-download-artifact@v6
+        if: steps.get-run-id.outputs.run_id != ''
+        uses: actions/download-artifact@v4
         with:
-          # Fall back to GITHUB_TOKEN when CONSUMER_REPO_TOKEN is not yet configured
-          # so the action receives a valid auth token and won't throw
-          # "Parameter token or opts.auth is required".
-          # GITHUB_TOKEN can't reach cross-repo artifacts, so the download may
-          # return a 404 — that's fine because continue-on-error handles it.
-          github_token: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
-          workflow: consumer-contract-tests.yml
-          repo: ${{ github.repository_owner }}/device-api-consumer
-          name: pact-contracts
-          path: contracts/
-        # continue-on-error so first-run (no consumer artifact yet) still passes
+            name: pact-contracts
+            path: contracts/
+            repository: ${{ github.repository_owner }}/device-api-consumer
+            run-id: ${{ steps.get-run-id.outputs.run_id }}
+            github-token: ${{ secrets.CONSUMER_REPO_TOKEN || github.token }}
         continue-on-error: true
 
       - name: List contract files available
@@ -159,11 +166,9 @@ jobs:
           name: provider-test-results-${{ github.sha }}
           path: TestResults/
 
-      - name: Publish test summary
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
-        uses: dorny/test-reporter@v1
         with:
-          name: Provider Contract Test Results
-          path: TestResults/*.trx
-          reporter: dotnet-trx
-          fail-on-error: true
+            files: "TestResults/*.trx"
+            check_name: "Provider Contract Test Results"

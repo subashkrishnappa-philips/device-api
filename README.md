@@ -129,7 +129,7 @@ push to main
 
 | Secret | Usage |
 |---|---|
-| `CONSUMER_REPO_SECRET` | PAT with **Actions: read + write** on `device-api-consumer` — used to download pact artifacts AND dispatch `swagger-updated` |
+| `CONSUMER_REPO_TOKEN` | PAT with **Actions: read + write** on `device-api-consumer` — used to download pact artifacts AND dispatch `swagger-updated` |
 
 ---
 

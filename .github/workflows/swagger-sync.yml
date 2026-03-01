@@ -29,7 +29,7 @@
 #
 # REQUIRED SECRETS
 # ────────────────
-#   CONSUMER_REPO_SECRET — PAT with "Actions:write" on device-api-consumer
+#   CONSUMER_REPO_TOKEN — PAT with "Actions:write" on device-api-consumer
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Swagger Sync to Consumer
@@ -66,7 +66,7 @@ jobs:
     env:
       # Expose secret existence as an env var — the secrets context is NOT
       # available in step-level if: expressions, but env vars are.
-      HAS_CONSUMER_TOKEN: ${{ secrets.CONSUMER_REPO_SECRET != '' }}
+      HAS_CONSUMER_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN != '' }}
 
     steps:
       - name: Checkout
@@ -251,7 +251,7 @@ jobs:
             if [ "${{ env.HAS_CONSUMER_TOKEN }}" = "true" ]; then
               echo "✅ **Consumer team has been notified automatically.** A PR will be opened in \`device-api-consumer\`." >> $GITHUB_STEP_SUMMARY
             else
-              echo "⚠️ **CONSUMER_REPO_SECRET is not configured — automatic dispatch was skipped.**" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️ **CONSUMER_REPO_TOKEN is not configured — automatic dispatch was skipped.**" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "To open the stub PR manually, go to the consumer repo and trigger the workflow:" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
