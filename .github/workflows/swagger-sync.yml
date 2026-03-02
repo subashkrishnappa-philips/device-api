@@ -200,23 +200,65 @@ jobs:
 
       # ── Dispatch swagger-updated to consumer CI ───────────────────────────────
       # The consumer CI will download the stubs and open a PR with them.
-      # Guard: repository-dispatch requires a cross-repo PAT; skip if not configured
-      # rather than letting the action throw "Parameter token or opts.auth is required".
+      # Guard: repository-dispatch requires a cross-repo PAT; skip if not configured.
+      # CONSUMER_REPO_TOKEN requirements:
+      #   • Classic PAT  → repo scope
+      #   • Fine-grained → Resource owner = device-api-consumer's owner,
+      #                    Repository access includes device-api-consumer,
+      #                    Permission: Contents = Write
       - name: Dispatch swagger-updated to device-api-consumer
         if: steps.check-stubs.outputs.stubs_found == 'true' && env.HAS_CONSUMER_TOKEN == 'true'
-        uses: peter-evans/repository-dispatch@v3
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
-          repository: ${{ github.repository_owner }}/device-api-consumer
-          event-type: swagger-updated
-          client-payload: |
-            {
-              "provider_repo":   "${{ github.repository }}",
-              "provider_run_id": "${{ github.run_id }}",
-              "provider_sha":    "${{ github.sha }}",
-              "provider_ref":    "${{ github.ref_name }}",
-              "stub_count":      "${{ steps.check-stubs.outputs.stub_count }}",
-              "swagger_url":     "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          github-token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          script: |
+            const consumerRepo = 'device-api-consumer';
+            const owner        = context.repo.owner;
+
+            try {
+              await github.rest.repos.createDispatchEvent({
+                owner,
+                repo:       consumerRepo,
+                event_type: 'swagger-updated',
+                client_payload: {
+                  provider_repo:   context.repo.owner + '/' + context.repo.repo,
+                  provider_run_id: String(context.runId),
+                  provider_sha:    context.sha,
+                  provider_ref:    context.ref.replace('refs/heads/', ''),
+                  stub_count:      '${{ steps.check-stubs.outputs.stub_count }}',
+                  swagger_url:     `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+                }
+              });
+
+              console.log(`✅ repository_dispatch sent to ${owner}/${consumerRepo}`);
+              await core.summary
+                .addHeading('Consumer Dispatch', 3)
+                .addRaw(`✅ \`swagger-updated\` dispatched to **${owner}/${consumerRepo}**.`)
+                .write();
+
+            } catch (err) {
+              const is403 = err.status === 403;
+              const msg = is403
+                ? [
+                    `repository_dispatch on ${owner}/${consumerRepo} returned 403.`,
+                    ``,
+                    `CONSUMER_REPO_TOKEN does not have the required permissions.`,
+                    `Fix one of the following in GitHub → Settings → Developer settings → Personal access tokens:`,
+                    ``,
+                    `  Classic PAT  : enable the "repo" scope`,
+                    `  Fine-grained : set Resource owner = ${owner}`,
+                    `                 Repository access  = ${consumerRepo} (or "All repositories")`,
+                    `                 Permission         : Contents → Write`
+                  ].join('\n')
+                : `Dispatch failed (HTTP ${err.status}): ${err.message}`;
+
+              await core.summary
+                .addHeading('Consumer Dispatch — Failed', 3)
+                .addRaw(`❌ \`swagger-updated\` could **not** be dispatched to **${owner}/${consumerRepo}**.\n\n`)
+                .addRaw('```\n' + msg + '\n```')
+                .write();
+
+              core.setFailed(msg);
             }
 
       # ── Commit updated swagger-baseline.json back to device-api ──────────────

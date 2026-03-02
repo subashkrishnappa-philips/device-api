@@ -24,7 +24,7 @@ namespace DeviceApi.Models
         public string Username { get; set; } = string.Empty;
 
         /// <summary>
-        /// The new part number to associate with the device.
+        /// The new part number to the associate with the device.
         /// Optional. When provided, the device catalogue entry will be updated.
         /// </summary>
         /// <example>PN-4400-REV-B</example>
