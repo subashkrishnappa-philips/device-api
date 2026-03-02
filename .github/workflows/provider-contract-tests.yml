@@ -10,9 +10,10 @@
 #   2. Download the latest pact file published by device-api-consumer CI
 #   3. Run provider tests — DeviceApi boots in-process via ApiBootstrap,
 #      no external server needed
-#        - DeviceApiProviderTests        (pact replay)
-#        - SwaggerContractValidatorTests (swagger drift + consumer notification)
-#        - SwaggerCoverageTests          (coverage gate)
+#        - DeviceApiProviderTests              (pact replay)
+#        - SwaggerContractValidatorTests        (swagger drift + consumer notification)
+#        - SwaggerCoverageTests                 (endpoint coverage gate)
+#        - SwaggerResponseFieldCoverageTests    (response field coverage gate — catches new fields not in pact)
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Provider Contract Tests
