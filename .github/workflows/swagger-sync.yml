@@ -29,7 +29,9 @@
 #
 # REQUIRED SECRETS
 # ────────────────
-#   CONSUMER_REPO_TOKEN — PAT with "Actions:write" on device-api-consumer
+#   CONSUMER_REPO_TOKEN — classic PAT with `repo` scope, OR a fine-grained PAT
+#                         with "Contents: write" on device-api-consumer.
+#                         (repository_dispatch requires Contents: write, not Actions: write)
 # ──────────────────────────────────────────────────────────────────────────────
 
 name: Swagger Sync to Consumer
