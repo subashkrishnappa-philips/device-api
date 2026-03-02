@@ -96,7 +96,7 @@
             "maxLength": 100,
             "minLength": 0,
             "type": "string",
-            "description": "The new part number to associate with the device.\nOptional. When provided, the device catalogue entry will be updated.",
+            "description": "The new part number to the associate with the device.\nOptional. When provided, the device catalogue entry will be updated.",
             "nullable": true,
             "example": "PN-4400-REV-B"
           }
