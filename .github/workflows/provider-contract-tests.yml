@@ -30,9 +30,11 @@ concurrency:
   cancel-in-progress: true
 
 # dorny/test-reporter requires checks:write to create GitHub Check runs
+# actions:write is required for GITHUB_TOKEN to trigger workflow_dispatch on swagger-sync
 permissions:
   contents: read
   checks: write
+  actions: write
 
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
@@ -172,3 +174,39 @@ jobs:
         with:
             files: "TestResults/*.trx"
             check_name: "Provider Contract Test Results"
+
+  # ── Job 3: Auto-trigger Swagger Sync on test failure ─────────────────────────
+  # When provider tests fail it means the API has drifted from the pact
+  # (e.g. a new field like newPartNumber is present in the API but not yet
+  # covered by a consumer interaction).  Automatically kick off swagger-sync
+  # so stubs are generated and a PR is opened in device-api-consumer.
+  trigger-swagger-sync:
+    name: Trigger Swagger Sync (on failure)
+    runs-on: ubuntu-latest
+    needs: provider-tests
+    # Only run when provider-tests failed; skip on PRs to avoid noise
+    if: failure() && github.event_name != 'pull_request'
+
+    steps:
+      - name: Dispatch swagger-sync workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              workflow_id: 'swagger-sync.yml',
+              ref: context.ref
+            });
+
+            console.log('swagger-sync.yml dispatched due to provider test failure');
+
+            await core.summary
+              .addHeading('Swagger Sync Triggered', 3)
+              .addRaw(
+                '⚠️ Provider contract tests **failed** — ' +
+                '`swagger-sync.yml` has been dispatched to regenerate consumer stubs.\n\n' +
+                'A pull request will be opened in `device-api-consumer` with updated stubs.'
+              )
+              .write();
